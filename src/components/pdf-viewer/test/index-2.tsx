@@ -4,18 +4,17 @@ import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
-
 interface Field {
   text: string;
   x: number;
   y: number;
   width: number;
   height: number;
-  pageHeight: number; // Added pageHeight here
+  pageHeight: number;
 }
 
 // https://www.npmjs.com/package/react-pdf
-const PDFViewer: React.FC<{ pdfUrl: string }> = ({ pdfUrl }) => {
+const PDFViewer: React.FC<{ pdfUrl: string; textsToHighlight: string[] }> = ({ pdfUrl, textsToHighlight }) => {
   const [numPages, setNumPages] = useState<number | null>(null);
   const [fieldsToHighlight, setFieldsToHighlight] = useState<Field[][]>([]);
   const [scales, setScales] = useState<number[]>([]); // Store scaling factors for each page
@@ -38,15 +37,18 @@ const PDFViewer: React.FC<{ pdfUrl: string }> = ({ pdfUrl }) => {
             const viewport = page.getViewport({ scale: 1 }); // Use scale 1 for raw coordinates
             const textContent = await page.getTextContent();
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            return textContent.items.map((item: any) => ({
-              text: item.str,
-              x: item.transform[4], // raw x
-              y: item.transform[5], // raw y (adjusted later)
-              width: item.width, // text width
-              height: item.height, // text height
-              pageHeight: viewport.height, // page height for y-axis correction
-            }));
+            return textContent.items
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              .filter((item: any) => textsToHighlight.some(text => item.str.includes(text)))
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              .map((item: any) => ({
+                text: item.str,
+                x: item.transform[4], // raw x
+                y: item.transform[5], // raw y (adjusted later)
+                width: item.width, // text width
+                height: item.height, // text height
+                pageHeight: viewport.height, // page height for y-axis correction
+              }));
           })
         );
 
@@ -57,7 +59,7 @@ const PDFViewer: React.FC<{ pdfUrl: string }> = ({ pdfUrl }) => {
     };
 
     fetchPDF();
-  }, [pdfUrl]);
+  }, [pdfUrl, textsToHighlight]);
 
   const renderHighlights = (page: number, scale: number) => {
     const fieldsOnPage = fieldsToHighlight[page - 1];
@@ -72,7 +74,7 @@ const PDFViewer: React.FC<{ pdfUrl: string }> = ({ pdfUrl }) => {
           opacity: 0.4,
           left: `${field.x * scale}px`,
           // Adjust the y-coordinate by subtracting field.height for alignment correction
-          top: `${(field.pageHeight - field.y - field.height) * scale}px`, 
+          top: `${(field.pageHeight - field.y - field.height) * scale}px`,
           width: `${field.width * scale}px`,
           height: `${field.height * scale}px`,
         }}
@@ -89,7 +91,7 @@ const PDFViewer: React.FC<{ pdfUrl: string }> = ({ pdfUrl }) => {
   };
 
   return (
-    <div style={{ position: 'relative', width: 'vw', height: 'vh' }}>
+    <div style={{ position: 'relative', width: '100vw', height: '100vh' }}>
       <Document file={pdfUrl} onLoadSuccess={onDocumentLoadSuccess}>
         {Array.from(new Array(numPages), (el, index) => (
           <div key={`page_${index + 1}`} style={{ position: 'relative' }}>
